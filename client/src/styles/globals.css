@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    height: 100%;
+    height: -webkit-fill-available;
+  }
+
+  body {
+    min-height: 100%;
+    min-height: -webkit-fill-available;
+    background-color: #0d0f17;
+    color: #e8eaf6;
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Prevent iOS bounce scroll */
+    overscroll-behavior: none;
+    position: fixed;
+    width: 100%;
+  }
+
+  #root {
+    height: 100dvh; /* dvh = dynamic viewport height, accounts for iOS browser chrome */
+    width: 100%;
+    overflow: hidden;
+  }
+
+  @media (min-width: 768px) {
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3d4266; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4f5580; }
+  }
+
+  /* Bigger tap targets on mobile */
+  @media (max-width: 767px) {
+    input, textarea, select {
+      font-size: 16px; /* prevents iOS zoom on focus */
+    }
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-lg transition-all duration-150 active:scale-95 select-none;
+  }
+  .btn-ghost {
+    @apply text-text-secondary hover:text-text-primary hover:bg-surface-400 px-3 py-2 rounded-lg transition-all duration-150 select-none;
+  }
+  .input-base {
+    @apply w-full bg-surface-900 border border-surface-300 rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-brand-500 transition-colors;
+  }
+  .channel-item {
+    @apply flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-text-secondary hover:text-text-primary hover:bg-surface-400 transition-all duration-100 text-sm select-none;
+  }
+  .channel-item.active {
+    @apply bg-surface-400 text-text-primary;
+  }
+  .message-bubble {
+    @apply relative hover:bg-surface-500/30 px-4 py-1 rounded-lg transition-colors duration-75;
+  }
+  .status-dot {
+    @apply w-3 h-3 rounded-full border-2 border-surface-800;
+  }
+}
+
+/* Safe area utility classes */
+.pt-safe  { padding-top: env(safe-area-inset-top, 0px); }
+.pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pl-safe  { padding-left: env(safe-area-inset-left, 0px); }
+.pr-safe  { padding-right: env(safe-area-inset-right, 0px); }
+
+/* Minimum safe bottom - for input bars */
+.pb-safe-min { padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)); }
+
+/* Hide scrollbars */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Panel transitions */
+.panel-slide { will-change: transform; transform: translateZ(0); }
+
+/* Prevent blue tap flash on iOS */
+* { -webkit-tap-highlight-color: transparent; }

@@ -1,0 +1,47 @@
+# Node modules
+node_modules/
+
+# Env files
+.env
+.env.*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# Build outputs
+dist/
+build/
+
+# Vite/cache
+node_modules/.vite/
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# macOS
+.DS_Store
+
+# Generated files
+*.tgz
+
+# Optional npm cache
+.npm
+
+# Misc
+coverage/
+coverage-final.json
+
+# If using lock files you do not want to commit
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
