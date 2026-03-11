@@ -127,3 +127,4 @@ Add UptimeRobot to ping `https://your-app.onrender.com/api/health` every 10 minu
 - PWA service worker caches UI assets for offline shell
 - WebRTC is P2P — suitable for small groups (< 15 people); for scale, use a media server (mediasoup, LiveKit)
 # Nexuschat
+# Nexuschat
