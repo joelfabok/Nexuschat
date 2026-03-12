@@ -58,7 +58,7 @@ app.use((_req, res, next) => {
 });
 
 const limiter = rateLimit({ windowMs: 15*60*1000, max: process.env.NODE_ENV==='production' ? 200 : 2000 });
-const authLimiter = rateLimit({ windowMs: 15*60*1000, max: process.env.NODE_ENV==='production' ? 20 : 500, message: { error: 'Too many auth attempts' } });
+const authLimiter = rateLimit({ windowMs: 15*60*1000, max: process.env.NODE_ENV==='production' ? 200 : 500, message: { error: 'Too many auth attempts' } });
 app.use('/api/', limiter);
 app.use('/api/auth/', authLimiter);
 

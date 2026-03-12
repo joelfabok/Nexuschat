@@ -3,6 +3,7 @@ import { Paperclip, Send, Edit2, Trash2, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuthStore } from '../../context/authStore';
 import { useProfile } from '../../context/ProfileContext';
+import { useUnreadStore } from '../../context/unreadStore';
 import { getSocket } from '../../utils/socket';
 import api from '../../utils/api';
 import toast from 'react-hot-toast';
@@ -21,11 +22,26 @@ export default function DMChat({ conversation }) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const { user } = useAuthStore();
   const { openProfile } = useProfile() || {};
+  const { markDMRead, getDMUnread } = useUnreadStore();
+  const [pendingNewMessages, setPendingNewMessages] = useState(0);
+  const [isScrolledToBottom, setIsScrolledToBottom] = useState(true);
 
   const otherUser = conversation.participants?.find(p => (p._id || p) !== user._id);
+
+  const handleScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 40;
+    setIsScrolledToBottom(atBottom);
+    if (atBottom && conversation?._id) {
+      setPendingNewMessages(0);
+      markDMRead(conversation._id);
+    }
+  };
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -33,10 +49,16 @@ export default function DMChat({ conversation }) {
     setMessages([]);
     setEditingId(null);
     setLoading(true);
+    setPendingNewMessages(0);
+    markDMRead(conversation._id);
+
     api.get(`/dms/${conversation._id}/messages`)
       .then(({ data }) => {
         setMessages(data);
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'instant' }), 50);
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+          setIsScrolledToBottom(true);
+        }, 50);
       })
       .catch(() => toast.error('Failed to load messages'))
       .finally(() => setLoading(false));
@@ -50,11 +72,16 @@ export default function DMChat({ conversation }) {
     const onNew = ({ conversationId, message }) => {
       if (conversationId !== conversation._id) return;
       setMessages(prev => {
-        // avoid duplicate if we already added it optimistically
         if (prev.find(m => m._id === message._id)) return prev;
         return [...prev, message];
       });
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+
+      if (isScrolledToBottom) {
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        markDMRead(conversation._id);
+      } else {
+        setPendingNewMessages(prev => prev + 1);
+      }
     };
 
     const onEdited = ({ conversationId, message }) => {
@@ -68,15 +95,14 @@ export default function DMChat({ conversation }) {
     };
 
     socket.on('dm:message', onNew);
-    socket.on('dm:message-edited', onEdited);
-    socket.on('dm:message-deleted', onDeleted);
-    return () => {
-      socket.off('dm:message', onNew);
-      socket.off('dm:message-edited', onEdited);
-      socket.off('dm:message-deleted', onDeleted);
-    };
-  }, [conversation._id]);
-
+      socket.on('dm:message-edited', onEdited);
+      socket.on('dm:message-deleted', onDeleted);
+      return () => {
+        socket.off('dm:message', onNew);
+        socket.off('dm:message-edited', onEdited);
+        socket.off('dm:message-deleted', onDeleted);
+      };
+  }, [conversation._id, isScrolledToBottom, markDMRead]);
   const sendMessage = async (e) => {
     e?.preventDefault();
     if (!input.trim()) return;
@@ -180,7 +206,15 @@ export default function DMChat({ conversation }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-4 px-4 space-y-0.5">
+      <div className="flex-1 overflow-y-auto py-4 px-4 space-y-0.5" ref={messagesContainerRef} onScroll={handleScroll}>
+        {(pendingNewMessages > 0 || getDMUnread(conversation._id) > 0) && (
+          <div className="mb-2 px-2 py-1 rounded-lg bg-surface-700 border border-surface-500 text-xs text-brand-300 text-center">
+            {pendingNewMessages > 0
+              ? `${pendingNewMessages} new message${pendingNewMessages > 1 ? 's' : ''}`
+              : `${getDMUnread(conversation._id)} unread message${getDMUnread(conversation._id) > 1 ? 's' : ''}`
+            }
+          </div>
+        )}
         {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
