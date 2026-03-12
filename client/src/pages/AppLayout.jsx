@@ -24,6 +24,7 @@ export default function AppLayout() {
   const [activeDM, setActiveDM] = useState(null);
   const [view, setView] = useState('dms'); // 'dms' | 'server' | 'friends'
   const [mobileView, setMobileView] = useState('servers'); // 'servers' | 'sidebar' | 'chat'
+  const [showRulesModal, setShowRulesModal] = useState(false);
   const { user } = useAuthStore();
   const { markChannelUnread, markChannelRead, markDMUnread, markDMRead } = useUnreadStore();
 
@@ -175,6 +176,24 @@ export default function AppLayout() {
     }
   };
 
+  useEffect(() => {
+    if (!activeServer) return setShowRulesModal(false);
+    const member = activeServer.members?.find(m => (m.user?._id || m.user) === user._id);
+    setShowRulesModal(activeServer.requiresRulesAgreement && !member?.acceptedRules);
+  }, [activeServer, user._id]);
+
+  const acceptServerRules = async () => {
+    if (!activeServer) return;
+    try {
+      const { data } = await api.post(`/servers/${activeServer._id}/accept-rules`);
+      handleServerUpdate(data);
+      setShowRulesModal(false);
+      toast.success('Server rules accepted');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to accept rules');
+    }
+  };
+
   const handleServerDelete = (serverId) => {
     setServers(prev => prev.filter(s => s._id !== serverId));
     if (activeServer?._id === serverId) {
@@ -305,10 +324,29 @@ export default function AppLayout() {
     </div>
   );
 
+  const rulesModal = showRulesModal && activeServer ? (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-surface-700 border border-surface-300 rounded-2xl p-6">
+        <h3 className="text-lg font-bold text-text-primary mb-3">{activeServer.name} Rules</h3>
+        <p className="text-sm text-text-secondary mb-4">You must accept these rules before posting messages in this server.</p>
+        <div className="max-h-72 overflow-y-auto p-3 bg-surface-600 border border-surface-400 rounded-lg text-sm text-text-primary">
+          {activeServer.rulesText || 'No rules have been set yet.'}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={acceptServerRules}
+            className="btn-primary px-4 py-2 text-sm"
+          >Accept</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <ProfileProvider onStartDM={handleDMSelect}>
       {mobileLayout}
       {desktopLayout}
+      {rulesModal}
     </ProfileProvider>
   );
 }

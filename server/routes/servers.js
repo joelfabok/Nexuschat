@@ -16,7 +16,7 @@ const hasRole = (server, userId, roles) => roles.includes(getMember(server, user
 router.get('/', authenticate, async (req, res) => {
   try {
     const servers = await Server.find({ 'members.user': req.user._id })
-      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit')
+      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit requiresRulesAgreement ruleText')
       .populate('members.user', 'username displayName avatar status avatarColor')
       .lean();
     res.json(servers);
@@ -40,6 +40,8 @@ router.get('/preview/:inviteCode', async (req, res) => {
       name: server.name,
       description: server.description || '',
       memberCount: server.members.length,
+      requiresRulesAgreement: server.requiresRulesAgreement,
+      rulesText: server.rulesText,
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load invite' });
@@ -59,17 +61,39 @@ router.post('/join/:inviteCode', authenticate, async (req, res) => {
       return res.status(409).json({ error: 'Already a member' });
     }
 
-    server.members.push({ user: req.user._id, role: 'member' });
+    server.members.push({ user: req.user._id, role: 'member', acceptedRules: false });
     await server.save();
     await User.findByIdAndUpdate(req.user._id, { $push: { servers: server._id } });
 
     const populated = await Server.findById(server._id)
-      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit')
+      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit requiresRulesAgreement ruleText')
       .populate('members.user', 'username displayName avatar status avatarColor');
     res.json(populated);
   } catch (err) {
     console.error('join error', err);
     res.status(500).json({ error: 'Failed to join server' });
+  }
+});
+
+// ── ACCEPT SERVER RULES ─────────────────────────────────────────────────────────
+router.post('/:serverId/accept-rules', authenticate, async (req, res) => {
+  try {
+    const server = await Server.findById(req.params.serverId);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+    const member = server.members.find(m => (m.user._id || m.user).toString() === req.user._id.toString());
+    if (!member) return res.status(403).json({ error: 'Not a member' });
+    if (!server.requiresRulesAgreement) return res.status(400).json({ error: 'No rules to agree to' });
+
+    member.acceptedRules = true;
+    await server.save();
+
+    const populated = await Server.findById(server._id)
+      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit requiresRulesAgreement ruleText')
+      .populate('members.user', 'username displayName avatar status avatarColor');
+    res.json(populated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to accept rules' });
   }
 });
 
@@ -93,7 +117,7 @@ router.post('/', authenticate, async (req, res) => {
     await User.findByIdAndUpdate(req.user._id, { $push: { servers: server._id } });
 
     const populated = await Server.findById(server._id)
-      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit')
+      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit requiresRulesAgreement ruleText')
       .populate('members.user', 'username displayName avatar status avatarColor');
     res.status(201).json(populated);
   } catch (err) {
@@ -106,7 +130,7 @@ router.post('/', authenticate, async (req, res) => {
 router.get('/:serverId', authenticate, async (req, res) => {
   try {
     const server = await Server.findById(req.params.serverId)
-      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit')
+      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit requiresRulesAgreement ruleText')
       .populate('members.user', 'username displayName avatar status avatarColor');
     if (!server) return res.status(404).json({ error: 'Server not found' });
     if (!server.members.some(m => (m.user._id || m.user).equals(req.user._id))) {
@@ -126,14 +150,16 @@ router.patch('/:serverId', authenticate, async (req, res) => {
     if (!hasRole(server, req.user._id, ['owner', 'admin'])) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    const { name, description, icon } = req.body;
+    const { name, description, icon, requiresRulesAgreement, rulesText } = req.body;
     if (name !== undefined) server.name = name.trim().slice(0, 100);
     if (description !== undefined) server.description = description.trim().slice(0, 500);
     if (icon !== undefined) server.icon = icon;
+    if (requiresRulesAgreement !== undefined) server.requiresRulesAgreement = Boolean(requiresRulesAgreement);
+    if (rulesText !== undefined) server.rulesText = rulesText.trim().slice(0, 4096);
     await server.save();
 
     const populated = await Server.findById(server._id)
-      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit')
+      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit requiresRulesAgreement ruleText')
       .populate('members.user', 'username displayName avatar status avatarColor');
     res.json(populated);
   } catch (err) {
@@ -217,7 +243,7 @@ router.patch('/:serverId/members/:memberId', authenticate, async (req, res) => {
     await server.save();
 
     const populated = await Server.findById(server._id)
-      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit')
+      .populate('channels', 'name type position topic locked isPrivate slowMode userLimit requiresRulesAgreement ruleText')
       .populate('members.user', 'username displayName avatar status avatarColor');
     res.json(populated);
   } catch (err) {

@@ -10,8 +10,17 @@ export default function ServerSettingsModal({ server, onClose, onUpdate, onDelet
   const [tab, setTab] = useState('Overview');
   const [name, setName] = useState(server.name);
   const [description, setDescription] = useState(server.description || '');
+  const [requiresRulesAgreement, setRequiresRulesAgreement] = useState(server.requiresRulesAgreement || false);
+  const [rulesText, setRulesText] = useState(server.rulesText || '');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState('');
+
+  useEffect(() => {
+    setName(server.name || '');
+    setDescription(server.description || '');
+    setRequiresRulesAgreement(Boolean(server.requiresRulesAgreement));
+    setRulesText(server.rulesText || '');
+  }, [server]);
   const { user } = useAuthStore();
 
   const isOwner = server.owner === user._id || server.owner?._id === user._id;
@@ -22,7 +31,12 @@ export default function ServerSettingsModal({ server, onClose, onUpdate, onDelet
     if (!name.trim()) return toast.error('Name required');
     setSaving(true);
     try {
-      const { data } = await api.patch(`/servers/${server._id}`, { name: name.trim(), description: description.trim() });
+      const { data } = await api.patch(`/servers/${server._id}`, {
+        name: name.trim(),
+        description: description.trim(),
+        requiresRulesAgreement,
+        rulesText: rulesText.trim(),
+      });
       onUpdate(data);
       toast.success('Server updated!');
     } catch (err) {
@@ -117,6 +131,22 @@ export default function ServerSettingsModal({ server, onClose, onUpdate, onDelet
                     maxLength={500}
                     placeholder="What's this server about?"
                   />
+                </div>
+                <div className="mt-5">
+                  <label className="flex items-center gap-2 text-xs text-text-muted mb-1">
+                    <input type="checkbox" checked={requiresRulesAgreement} onChange={e => setRequiresRulesAgreement(e.target.checked)} disabled={!canManage} />
+                    Require users to agree to server rules on first join
+                  </label>
+                  {requiresRulesAgreement && (
+                    <textarea
+                      className="input-base resize-none h-28"
+                      value={rulesText}
+                      onChange={e => setRulesText(e.target.value)}
+                      disabled={!canManage}
+                      maxLength={4096}
+                      placeholder="Enter server rules for mandatory acceptance"
+                    />
+                  )}
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-surface-300">
                   <p className="text-xs text-text-muted">Server ID: <span className="font-mono">{server._id}</span></p>

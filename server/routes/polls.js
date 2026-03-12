@@ -2,7 +2,13 @@ import express from 'express';
 import { authenticate } from '../middleware/auth.js';
 import Poll from '../models/Poll.js';
 import Message from '../models/Message.js';
+import Server from '../models/Server.js';
 import { io } from '../index.js';
+
+const getMemberRole = (server, userId) => {
+  const member = server.members.find(m => (m.user._id || m.user).toString() === userId.toString());
+  return member?.role || null;
+};
 
 const router = express.Router();
 
@@ -12,6 +18,13 @@ router.post('/', authenticate, async (req, res) => {
     const { question, options, channelId, serverId, multiChoice, endsAt } = req.body;
     if (!question || !options || options.length < 2) {
       return res.status(400).json({ error: 'Question and at least 2 options required' });
+    }
+
+    const server = await Server.findById(serverId);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+    const role = getMemberRole(server, req.user._id);
+    if (!['owner', 'admin', 'moderator'].includes(role)) {
+      return res.status(403).json({ error: 'Only server staff can create polls' });
     }
 
     const poll = await Poll.create({
@@ -87,8 +100,10 @@ router.post('/:pollId/close', authenticate, async (req, res) => {
   try {
     const poll = await Poll.findById(req.params.pollId);
     if (!poll) return res.status(404).json({ error: 'Not found' });
-    if (poll.author.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Not authorized' });
+    const server = await Server.findById(poll.server);
+    const role = server ? getMemberRole(server, req.user._id) : null;
+    if (!['owner', 'admin', 'moderator'].includes(role)) {
+      return res.status(403).json({ error: 'Only staff can close polls' });
     }
     poll.closed = true;
     await poll.save();

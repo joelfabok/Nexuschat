@@ -29,6 +29,15 @@ export default function ChatArea({ channel, server }) {
   const { user } = useAuthStore();
   const { markChannelRead } = useUnreadStore();
 
+  const member = server?.members?.find(m => (m.user?._id || m.user) === user._id || (m.user?._id || m.user) === String(user._id));
+  const role = member?.role || 'member';
+  const isStaff = ['owner', 'admin', 'moderator'].includes(role);
+  const canCreatePoll = isStaff;
+  const hasAcceptedRules = !server?.requiresRulesAgreement || member?.acceptedRules;
+  const canPostInAnnouncement = channel?.type !== 'announcement' || isStaff;
+  const canPostInLocked = !channel?.locked || ['owner', 'admin'].includes(role);
+  const canPost = Boolean(channel) && canPostInAnnouncement && canPostInLocked && hasAcceptedRules;
+
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
   };
@@ -90,12 +99,30 @@ export default function ChatArea({ channel, server }) {
 
   const sendMessage = async (e) => {
     e?.preventDefault();
+    if (!canPost) {
+      if (!hasAcceptedRules && server?.requiresRulesAgreement) {
+        toast.error('You must accept server rules before posting');
+      } else {
+        toast.error(channel.type === 'announcement'
+          ? 'Only staff can post in announcement channels'
+          : 'Channel is locked for normal users');
+      }
+      return;
+    }
+
     if (!input.trim()) return;
     const content = input.trim();
     setInput('');
     try {
       await api.post(`/messages/channel/${channel._id}`, { content, server: server?._id });
-    } catch { toast.error('Failed to send message'); setInput(content); }
+    } catch (err) {
+      if (err?.response?.status === 403 && err?.response?.data?.requiresRulesAgreement) {
+        toast.error('You must agree to channel rules before posting');
+      } else {
+        toast.error('Failed to send message');
+      }
+      setInput(content);
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -170,6 +197,21 @@ export default function ChatArea({ channel, server }) {
 
       {/* Input */}
       <div className="px-3 flex-shrink-0" style={{ paddingTop: '8px', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))' }}>
+        {server?.requiresRulesAgreement && !hasAcceptedRules && (
+          <div className="mb-2 p-2 rounded-lg bg-yellow-100 border border-yellow-300 text-yellow-800 text-xs">
+            <p className="font-medium">You must accept the server rules before posting.</p>
+            <p className="mt-1 text-xs text-text-secondary">{server.rulesText || 'No rules text provided yet.'}</p>
+          </div>
+        )}
+
+        {!canPost && !server?.requiresRulesAgreement && (
+          <div className="mb-2 p-2 rounded-lg bg-yellow-100 border border-yellow-300 text-yellow-800 text-xs">
+            {channel.type === 'announcement'
+              ? 'This is an announcement channel: only staff can post here.'
+              : 'This channel is locked: only server owner/admin can post.'}
+          </div>
+        )}
+
         {showEmojiBar && (
           <div className="flex items-center gap-1 mb-2 p-2 bg-surface-600 rounded-xl border border-surface-300">
             {QUICK_EMOJIS.map(e => (
@@ -188,19 +230,27 @@ export default function ChatArea({ channel, server }) {
             className={`w-8 h-8 flex items-center justify-center transition-colors flex-shrink-0 rounded-lg hover:bg-surface-400 ${showEmojiBar ? 'text-brand-400' : 'text-text-muted hover:text-text-primary'}`}>
             <Smile size={16} />
           </button>
-          <button type="button" onClick={() => setShowPollModal(true)}
-            className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors flex-shrink-0 rounded-lg hover:bg-surface-400"
-            title="Create poll">
-            <BarChart2 size={16} />
-          </button>
+          {canCreatePoll ? (
+            <button type="button" onClick={() => setShowPollModal(true)}
+              className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors flex-shrink-0 rounded-lg hover:bg-surface-400"
+              title="Create poll">
+              <BarChart2 size={16} />
+            </button>
+          ) : (
+            <button type="button" disabled
+              className="w-8 h-8 flex items-center justify-center text-text-muted/50 cursor-not-allowed transition-colors flex-shrink-0 rounded-lg">
+              <BarChart2 size={16} />
+            </button>
+          )}
           <input
             className="flex-1 bg-transparent text-text-primary placeholder-text-muted text-sm focus:outline-none min-w-0"
-            placeholder={`Message #${channel.name}`}
+            placeholder={canPost ? `Message #${channel.name}` : 'Read-only channel'}
             value={input}
-            onChange={e => { setInput(e.target.value); sendTyping(); }}
+            onChange={e => { setInput(e.target.value); if (canPost) sendTyping(); }}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage(e)}
+            disabled={!canPost}
           />
-          <button onClick={sendMessage} disabled={!input.trim()}
+          <button onClick={sendMessage} disabled={!canPost || !input.trim()}
             className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-brand-400 disabled:opacity-30 transition-colors flex-shrink-0 rounded-lg hover:bg-surface-400">
             <Send size={16} />
           </button>
@@ -241,6 +291,10 @@ function MessageItem({ message, grouped, currentUserId, channel, server }) {
       toast.success('Message reported');
     } catch { toast.error('Failed to report'); }
   };
+
+  const role = server?.members?.find(m => (m.user?._id || m.user) === user._id || (m.user?._id || m.user) === String(user._id))?.role || 'member';
+  const isStaff = ['owner', 'admin', 'moderator'].includes(role);
+  const canDelete = isOwn || isStaff;
 
   return (
     <div className={`group message-bubble flex gap-3 ${grouped ? 'pt-0.5' : 'pt-4'}`}>
@@ -307,12 +361,12 @@ function MessageItem({ message, grouped, currentUserId, channel, server }) {
             {showMenu && (
               <div className="absolute right-0 top-8 z-40 bg-surface-800 border border-surface-300 rounded-xl shadow-xl p-1 min-w-[140px]"
                 onMouseLeave={() => setShowMenu(false)}>
-                {isOwn && (
+                {canDelete && (
                   <button onClick={deleteMessage} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-surface-600 rounded-lg transition-colors">
                     <Trash2 size={13} /> Delete
                   </button>
                 )}
-                {!isOwn && (
+                {!canDelete && (
                   <button onClick={reportMessage} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-surface-600 rounded-lg transition-colors">
                     <Flag size={13} /> Report
                   </button>

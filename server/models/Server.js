@@ -31,6 +31,7 @@ const serverSchema = new mongoose.Schema({
     role: { type: String, enum: ['owner', 'admin', 'moderator', 'member'], default: 'member' },
     nickname: { type: String, maxlength: 32, default: null },
     joinedAt: { type: Date, default: Date.now },
+    acceptedRules: { type: Boolean, default: false },
   }],
   channels: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -56,6 +57,15 @@ const serverSchema = new mongoose.Schema({
   inviteExpiry: {
     type: Date,
     default: null,
+  },
+  requiresRulesAgreement: {
+    type: Boolean,
+    default: false,
+  },
+  rulesText: {
+    type: String,
+    default: '',
+    maxlength: 4096,
   },
   isPublic: {
     type: Boolean,

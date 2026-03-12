@@ -268,7 +268,7 @@ export default function ChannelSidebar({ server, activeChannel, onChannelSelect,
                   </button>
                 ))}
               </div>
-              <form onSubmit={createChannel}>
+              <form onSubmit={createChannel} className="space-y-2">
                 <input autoFocus className="input-base text-sm py-1.5"
                   placeholder={newChannelType === 'voice' ? 'Voice Channel' : newChannelType === 'announcement' ? 'announcements' : 'new-channel'}
                   value={newChannelName} onChange={e => setNewChannelName(e.target.value)}

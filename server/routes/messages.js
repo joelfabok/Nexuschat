@@ -44,6 +44,16 @@ router.post('/channel/:channelId', authenticate, async (req, res) => {
     const channel = await Channel.findById(req.params.channelId);
     if (!channel) return res.status(404).json({ error: 'Channel not found' });
 
+    const server = await Server.findById(channel.server);
+    if (!server) return res.status(404).json({ error: 'Server not found' });
+
+    const member = server.members.find(m => m.user.equals(req.user._id));
+    if (!member) return res.status(403).json({ error: 'Not a member' });
+
+    if (server.requiresRulesAgreement && !member.acceptedRules) {
+      return res.status(403).json({ error: 'You must accept server rules before posting', requiresRulesAgreement: true, rulesText: server.rulesText });
+    }
+
     const role = await getUserRole(req.user._id, channel.server);
     if (!role) return res.status(403).json({ error: 'Not a member' });
 
@@ -55,6 +65,14 @@ router.post('/channel/:channelId', authenticate, async (req, res) => {
     // Announcement channel — only staff can post
     if (channel.type === 'announcement' && !['owner', 'admin', 'moderator'].includes(role)) {
       return res.status(403).json({ error: 'Only staff can post in announcement channels' });
+    }
+
+    // Rules agreement
+    if (channel.requiresRulesAgreement && channel.type !== 'voice') {
+      const member = server.members.find(m => m.user.equals(req.user._id));
+      if (!member?.agreedRules?.some(c => c.equals(channel._id))) {
+        return res.status(403).json({ error: 'You must accept rules before posting', requiresRulesAgreement: true, ruleText: channel.ruleText });
+      }
     }
 
     // Slow mode
