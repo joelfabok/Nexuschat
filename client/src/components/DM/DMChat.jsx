@@ -213,11 +213,11 @@ export default function DMChat({ conversation }) {
           return (
             <div key={msg._id} className={`group flex gap-3 ${grouped ? 'pt-0.5' : 'pt-4'}`}>
               {!grouped ? (
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 mt-0.5"
-                  style={{ backgroundColor: authorColor }}
-                  onClick={() => !isOwn && openProfile?.(msg.author?._id || otherUser._id)}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${!isOwn ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500' : ''} transition-all`}>
-                  {authorInitials}
+                <div
+  style={{ backgroundColor: authorColor }}
+  onClick={() => !isOwn && openProfile?.(msg.author?._id || otherUser._id)}
+  className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 mt-0.5 ${!isOwn ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500' : ''} transition-all`}
+>
                 </div>
               ) : <div className="w-9 flex-shrink-0" />}
 
