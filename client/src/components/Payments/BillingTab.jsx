@@ -18,7 +18,7 @@ const TIERS = [
     color: 'text-text-muted',
     bg: 'bg-surface-700',
     border: 'border-surface-300',
-    features: ['Text & voice chat', 'Join up to 10 servers', '10MB file uploads', 'Basic emoji reactions'],
+    features: ['Text & voice chat', 'Join up to 10 servers', '50MB file uploads', 'Basic emoji reactions'],
   },
   {
     id: 'pro',

@@ -67,11 +67,16 @@ export default function NotificationBell() {
     if (wasUnread) setUnreadCount(c => Math.max(0, c - 1));
   };
 
+  const removeNotification = (notifId) => {
+    setNotifications(prev => prev.filter(n => n._id !== notifId));
+  };
+
   const acceptFriendRequest = async (notif, e) => {
     e.stopPropagation();
     try {
       await api.post(`/friends/accept/${notif.friendRequestId}`);
-      markRead(notif._id);
+      removeNotification(notif._id);
+      setUnreadCount(c => Math.max(0, c - 1));
       fetchNotifications();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to accept');
@@ -82,7 +87,8 @@ export default function NotificationBell() {
     e.stopPropagation();
     try {
       await api.post(`/friends/decline/${notif.friendRequestId}`);
-      markRead(notif._id);
+      removeNotification(notif._id);
+      setUnreadCount(c => Math.max(0, c - 1));
       fetchNotifications();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to decline');
@@ -115,7 +121,7 @@ export default function NotificationBell() {
 
       {/* Panel */}
       {open && (
-        <div className="absolute right-0 top-10 w-96 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+        <div className="absolute left-0 bottom-full mb-2 w-96 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
             <span className="font-semibold text-white">Notifications</span>

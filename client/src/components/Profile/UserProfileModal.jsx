@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   X, MapPin, Globe, Twitter, Github, Instagram,
-  UserPlus, UserCheck, MessageCircle, Edit2, Check,
+  UserPlus, UserCheck, UserMinus, MessageCircle, Edit2, Check,
   Calendar, Users, Crown, Zap, Clock,
 } from 'lucide-react';
 import api from '../../utils/api';
@@ -125,6 +125,18 @@ export default function UserProfileModal({ userId, onClose, onStartDM }) {
       toast.success('Friend request accepted');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to accept');
+    }
+  };
+
+  const unfriend = async () => {
+    if (!confirm('Remove this friend?')) return;
+    try {
+      await api.delete(`/friends/${userId}`);
+      setProfile(prev => ({ ...prev, friendStatus: 'none' }));
+      toast.success('Friend removed');
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to unfriend');
     }
   };
 
@@ -270,9 +282,10 @@ export default function UserProfileModal({ userId, onClose, onStartDM }) {
                     </button>
                   )}
                   {profile?.friendStatus === 'friends' && (
-                    <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 text-green-400 text-sm rounded-lg">
-                      <UserCheck size={14} /> Friends
-                    </span>
+                    <button onClick={unfriend}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors">
+                      <UserMinus size={14} /> Unfriend
+                    </button>
                   )}
                   <button onClick={startDM}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors">

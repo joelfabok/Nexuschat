@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { UserPlus, UserMinus, Search, Check, X, Clock, Users } from 'lucide-react';
 import api from '../../utils/api';
 import { getSocket } from '../../utils/socket';
+import { useProfile } from '../../context/ProfileContext';
 
 const TABS = ['Friends', 'Pending', 'Add Friend'];
 
 export default function FriendsPanel({ onStartDM }) {
+  const { openProfile } = useProfile() || {};
   const [tab, setTab] = useState('Friends');
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -138,18 +140,18 @@ export default function FriendsPanel({ onStartDM }) {
                 <p>No friends yet. Add some!</p>
               </div>
             ) : friends.map(friend => (
-              <div key={friend._id} className="flex items-center gap-3 p-3 bg-gray-750 hover:bg-gray-700 rounded-xl group transition-colors">
+              <div key={friend._id} className="flex items-center gap-2 p-2 bg-gray-750 hover:bg-gray-700 rounded-lg group transition-colors">
                 <div className="relative">
-                  <Avatar user={friend} />
+                  <Avatar user={friend} size={7} />
                   <div className="absolute -bottom-0.5 -right-0.5"><StatusDot status={friend.status} /></div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white text-sm truncate">{friend.displayName || friend.username}</p>
-                  <p className="text-xs text-gray-500 truncate">{friend.customStatus || friend.status}</p>
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile?.(friend._id)}>
+                  <p className="font-medium text-white text-xs truncate">{friend.displayName || friend.username}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{friend.customStatus || friend.status}</p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => startDM(friend._id)}
-                    className="px-2 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors">
+                    className="px-2 py-1 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors">
                     Message
                   </button>
                   <button onClick={() => unfriend(friend._id)}
@@ -210,20 +212,22 @@ export default function FriendsPanel({ onStartDM }) {
             )}
 
             {searchResults.map(user => (
-              <div key={user._id} className="flex items-center gap-3 p-3 bg-gray-750 rounded-xl">
-                <Avatar user={user} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white text-sm">{user.displayName || user.username}</p>
-                  <p className="text-xs text-gray-500">{user.username}{user.userTag ? `#${user.userTag}` : ''}</p>
+              <div key={user._id} className="flex items-center gap-2 p-2 bg-gray-750 rounded-lg">
+                <Avatar user={user} size={7} />
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openProfile?.(user._id)}>
+                  <p className="font-medium text-white text-xs truncate">{user.displayName || user.username}</p>
                 </div>
-                <button
-                  onClick={() => sendRequest(user._id)}
-                  disabled={sentIds.has(user._id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${sentIds.has(user._id) ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
-                >
-                  <UserPlus size={12} />
-                  {sentIds.has(user._id) ? 'Sent' : 'Add Friend'}
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    onClick={() => sendRequest(user._id)}
+                    disabled={sentIds.has(user._id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${sentIds.has(user._id) ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+                  >
+                    <UserPlus size={12} />
+                    {sentIds.has(user._id) ? 'Sent' : 'Add Friend'}
+                  </button>
+                  <p className="text-[11px] text-gray-400">{user.username}{user.userTag ? `#${user.userTag}` : ''}</p>
+                </div>
               </div>
             ))}
           </>

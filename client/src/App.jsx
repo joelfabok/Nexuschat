@@ -1,3 +1,6 @@
+// Copyright (c) SphereDigital - used and modified in this project
+// All rights reserved.
+
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -12,6 +15,9 @@ function ProtectedRoute({ children }) {
   const { user } = useAuthStore();
   return user ? children : <Navigate to="/auth" replace />;
 }
+
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const ACTIVITY_KEY = 'nexus-last-activity';
 
 function App() {
   const { user, accessToken, refreshToken, setTokens, logout } = useAuthStore();
@@ -46,6 +52,33 @@ function App() {
       disconnectSocket();
     }
   }, [user?._id, authReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Activity tracking + 10m auto-logout (only if idle)
+  useEffect(() => {
+    const now = Date.now();
+    localStorage.setItem(ACTIVITY_KEY, String(now));
+
+    const refreshActivity = () => localStorage.setItem(ACTIVITY_KEY, String(Date.now()));
+    const checkIdle = () => {
+      const last = Number(localStorage.getItem(ACTIVITY_KEY));
+      if (last && Date.now() - last > INACTIVITY_TIMEOUT_MS && user) {
+        logout();
+      }
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(evt => window.addEventListener(evt, refreshActivity));
+
+    const intervalId = window.setInterval(checkIdle, 30 * 1000);
+
+    // On page load after refresh, enforce timeout gap too
+    checkIdle();
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, refreshActivity));
+      window.clearInterval(intervalId);
+    };
+  }, [user, logout]);
 
   // Show nothing while we're refreshing — prevents AppLayout from firing API calls with stale token
   if (!authReady) {

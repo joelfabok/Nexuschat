@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquare, Plus, Compass } from 'lucide-react';
+import { MessageSquare, Plus, Compass, Users } from 'lucide-react';
 import api from '../../utils/api';
 import { useUnreadStore } from '../../context/unreadStore';
 import toast from 'react-hot-toast';
@@ -24,7 +24,7 @@ function ServerIcon({ server, isActive, onClick }) {
   );
 }
 
-export default function ServerList({ servers, activeServer, onServerSelect, onDMView, onServerCreated, isDMView }) {
+export default function ServerList({ servers, activeServer, onServerSelect, onDMView, onFriendsView, onServerCreated, isDMView, isFriendsView }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [serverName, setServerName] = useState('');
@@ -88,6 +88,20 @@ export default function ServerList({ servers, activeServer, onServerSelect, onDM
                 {totalDMs > 99 ? '99+' : totalDMs}
               </span>
             )}
+          </button>
+        </div>
+
+        {/* Friends button */}
+        <div className="relative group flex justify-center mb-1">
+          <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full bg-text-primary transition-all duration-150 ${isFriendsView ? 'h-8' : 'h-0 group-hover:h-4'}`} />
+          <button
+            onClick={onFriendsView}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-150 relative ${
+              isFriendsView ? 'rounded-xl bg-brand-600 text-white' : 'bg-surface-700 text-text-secondary hover:bg-brand-600 hover:text-white hover:rounded-xl'
+            }`}
+            title="Friends"
+          >
+            <Users size={22} />
           </button>
         </div>
 

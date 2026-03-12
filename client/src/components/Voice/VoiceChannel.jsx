@@ -168,8 +168,26 @@ function WatchParty({ channelId, onClose }) {
   );
 }
 
+function SelfScreenSharePreview({ stream }) {
+  if (!stream) return null;
+  return (
+    <div className="w-full rounded-xl overflow-hidden border border-brand-500/50 bg-black relative">
+      <div className="absolute top-2 left-2 z-10 bg-black/70 backdrop-blur-sm rounded-lg px-2 py-1 flex items-center gap-1.5">
+        <Monitor size={12} className="text-brand-400" />
+        <span className="text-xs text-white font-medium">You are sharing your screen</span>
+      </div>
+      <video
+        autoPlay
+        playsInline
+        muted
+        className="w-full aspect-video object-contain"
+        ref={el => { if (el && stream) el.srcObject = stream; }}
+      />
+    </div>
+  );
+}
+
 function ScreenShareViewer({ streams }) {
-  // streams: { userId, displayName, stream }[]
   if (!streams.length) return null;
   const { displayName, stream } = streams[0];
 
@@ -195,6 +213,7 @@ export default function VoiceChannel({ channel }) {
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [localScreenStream, setLocalScreenStream] = useState(null);
   const [screenStreams, setScreenStreams] = useState([]); // incoming screen shares
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
@@ -373,11 +392,13 @@ export default function VoiceChannel({ channel }) {
       Object.values(screenPCsRef.current).forEach(pc => pc.close());
       screenPCsRef.current = {};
       setScreenSharing(false);
+      setLocalScreenStream(null);
       setParticipants(prev => prev.map(p => p.userId === user._id ? { ...p, screenSharing: false } : p));
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         screenStreamRef.current = stream;
+        setLocalScreenStream(stream);
         stream.getVideoTracks()[0].onended = () => toggleScreenShare();
         socket?.emit('voice:screen-share-start', { channelId: channel._id });
         setScreenSharing(true);
@@ -588,6 +609,7 @@ export default function VoiceChannel({ channel }) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {localScreenStream && <SelfScreenSharePreview stream={localScreenStream} />}
         {screenStreams.length > 0 && <ScreenShareViewer streams={screenStreams} />}
         <div className={`grid gap-3 ${
           participants.length === 1 ? 'grid-cols-1 max-w-[200px] mx-auto' :

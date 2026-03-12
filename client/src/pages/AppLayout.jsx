@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, MessageSquare, Hash, Users } from 'lucide-react';
 import NotificationBell from '../components/Notifications/NotificationBell';
-import UserProfileModal from '../components/Profile/UserProfileModal';
 import { ProfileProvider } from '../context/ProfileContext';
 import FriendsPanel from '../components/Friends/FriendsPanel';
 import ServerList from '../components/Layout/ServerList';
@@ -23,7 +22,7 @@ export default function AppLayout() {
   const [activeServer, setActiveServer] = useState(null);
   const [activeChannel, setActiveChannel] = useState(null);
   const [activeDM, setActiveDM] = useState(null);
-  const [view, setView] = useState('dms'); // 'dms' | 'server'
+  const [view, setView] = useState('dms'); // 'dms' | 'server' | 'friends'
   const [mobileView, setMobileView] = useState('servers'); // 'servers' | 'sidebar' | 'chat'
   const { user } = useAuthStore();
   const { markChannelUnread, markChannelRead, markDMUnread, markDMRead } = useUnreadStore();
@@ -110,6 +109,7 @@ export default function AppLayout() {
 
   const handleDMSelect = (conv) => {
     setActiveDM(conv);
+    setView('dms');
     markDMRead(conv._id);
     setMobileView('chat');
   };
@@ -145,6 +145,8 @@ export default function AppLayout() {
   // ── Shared content blocks ────────────────────────────────────────────────
   const sidebarContent = view === 'dms'
     ? <DMSidebar activeDM={activeDM} onDMSelect={handleDMSelect} />
+    : view === 'friends'
+    ? <FriendsPanel onStartDM={handleDMSelect} />
     : <ChannelSidebar server={activeServer} activeChannel={activeChannel}
         onChannelSelect={handleChannelSelect} onServerUpdate={handleServerUpdate}
         onServerDelete={handleServerDelete} />;
@@ -153,6 +155,8 @@ export default function AppLayout() {
     ? <DMChat conversation={activeDM} onRead={() => markDMRead(activeDM._id)} />
     : view === 'server' && activeChannel
     ? <ChatArea channel={activeChannel} server={activeServer} />
+    : view === 'friends'
+    ? <div className="h-full flex items-center justify-center text-gray-400">Select a friend to see options in the left panel.&#8203;</div>
     : <WelcomeScreen onDMView={handleDMView} />;
 
   const chatTitle = view === 'dms' && activeDM
@@ -166,8 +170,8 @@ export default function AppLayout() {
   const desktopLayout = (
     <div className="hidden md:flex h-screen w-screen overflow-hidden bg-surface-900">
       <ServerList servers={servers} activeServer={activeServer}
-        onServerSelect={handleServerSelect} onDMView={handleDMView}
-        onServerCreated={handleServerCreated} isDMView={view === 'dms'} />
+        onServerSelect={handleServerSelect} onDMView={handleDMView} onFriendsView={() => setView('friends')}
+        onServerCreated={handleServerCreated} isDMView={view === 'dms'} isFriendsView={view === 'friends'} />
       <div className="w-60 flex-shrink-0 flex flex-col bg-surface-800">
         {sidebarContent}
         <div className="flex items-center gap-1 px-2 pb-1">
@@ -245,5 +249,10 @@ export default function AppLayout() {
     </div>
   );
 
-  return <>{mobileLayout}{desktopLayout}</>;
+  return (
+    <ProfileProvider onStartDM={handleDMSelect}>
+      {mobileLayout}
+      {desktopLayout}
+    </ProfileProvider>
+  );
 }
