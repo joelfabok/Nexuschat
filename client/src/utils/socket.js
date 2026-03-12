@@ -12,8 +12,9 @@ export const connectSocket = (accessToken) => {
   // or fall back to same host with no port (works if you proxy /socket.io through vite)
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const serverUrl = isLocal
-    ? `http://localhost:3001`
-    : (import.meta.env.VITE_BACKEND_URL || `${window.location.protocol}//${window.location.hostname}:3001`);
+  ? `http://localhost:3001`
+  : (import.meta.env.VITE_BACKEND_URL || `${window.location.protocol}//${window.location.hostname}`);
+  //                                                                        no port here ^^^^^^^^^^
 
   socket = io(serverUrl, {
     auth: { token: accessToken },
