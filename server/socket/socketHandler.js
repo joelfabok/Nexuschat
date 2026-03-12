@@ -116,7 +116,10 @@ export const initializeSocket = (io) => {
     socket.on('voice:join', async ({ channelId }) => {
       try {
         const channel = await Channel.findById(channelId);
-        if (!channel || channel.type !== 'voice') return;
+        if (!channel || channel.type !== 'voice') {
+          socket.emit('voice:join-failed', { channelId, reason: 'This is not a voice channel' });
+          return;
+        }
 
         if (!voiceChannels.has(channelId)) voiceChannels.set(channelId, new Map());
         const vcUsers = voiceChannels.get(channelId);
@@ -143,6 +146,9 @@ export const initializeSocket = (io) => {
         const existingUsers = Array.from(vcUsers.values()).filter(u => u.userId !== user._id.toString());
         socket.emit('voice:users', { channelId, users: existingUsers });
 
+        // Confirmation to the joiner
+        socket.emit('voice:join-success', { channelId });
+
         // Tell everyone else this user joined
         socket.to(`voice:${channelId}`).emit('voice:user-joined', {
           channelId,
@@ -155,6 +161,7 @@ export const initializeSocket = (io) => {
         await Channel.findByIdAndUpdate(channelId, { $addToSet: { activeVoiceUsers: user._id } });
       } catch (err) {
         console.error('voice:join error', err);
+        socket.emit('voice:join-failed', { channelId, reason: 'Error joining voice channel' });
       }
     });
 

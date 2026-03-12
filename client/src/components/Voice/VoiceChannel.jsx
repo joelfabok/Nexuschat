@@ -209,6 +209,7 @@ function ScreenShareViewer({ streams }) {
 
 export default function VoiceChannel({ channel }) {
   const [joined, setJoined] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
@@ -320,6 +321,7 @@ export default function VoiceChannel({ channel }) {
   }, [channel._id, screenSharing]);
 
   const joinChannel = async () => {
+    setIsJoining(true);
     // iOS PWA fix: AudioContext must be created synchronously inside the tap handler
     // before any await, otherwise iOS blocks it as "not from user gesture"
     let iosAudioCtx = null;
@@ -365,7 +367,10 @@ export default function VoiceChannel({ channel }) {
       const socket = await waitForSocket();
       socket.emit('voice:join', { channelId: channel._id });
 
-      setJoined(true);
+      // Wait for server confirmation
+      const socket = await waitForSocket();
+      socket.emit('voice:join', { channelId: channel._id });
+
       setParticipants([{
         userId: user._id, username: user.username,
         displayName: user.displayName || user.username,
@@ -373,13 +378,32 @@ export default function VoiceChannel({ channel }) {
         muted: false, speaking: false, screenSharing: false,
       }]);
       speakingIntervalRef.current = setInterval(checkSpeaking, 100);
-      toast.success(`Joined ${channel.name}`);
+
+      // joined state is set when server acknowledges
+      const onJoinSuccess = ({ channelId }) => {
+        if (channelId !== channel._id) return;
+        setJoined(true);
+        setIsJoining(false);
+        toast.success(`Joined ${channel.name}`);
+        socket.off('voice:join-success', onJoinSuccess);
+      };
+      const onJoinFailed = ({ channelId, reason }) => {
+        if (channelId !== channel._id) return;
+        setIsJoining(false);
+        toast.error(reason || 'Failed to join voice channel');
+        socket.off('voice:join-failed', onJoinFailed);
+      };
+
+      socket.on('voice:join-success', onJoinSuccess);
+      socket.on('voice:join-failed', onJoinFailed);
+
     } catch (err) {
+      setIsJoining(false);
       // Clean up the pre-created AudioContext if we didn't use it
       iosAudioCtx?.close().catch(() => {});
       if (err.name === 'NotAllowedError') toast.error('Mic access denied — allow it in your browser/phone settings');
       else if (err.name === 'NotFoundError') toast.error('No microphone found');
-      else { console.error('Voice join error:', err); toast.error('Failed to join voice: ' + err.message); }
+      else { console.error('Voice join error:', err); toast.error('Failed to join voice: ' + (err.message || 'Unknown error')); }
     }
   };
 
@@ -586,8 +610,10 @@ export default function VoiceChannel({ channel }) {
         <p className="text-text-muted text-sm mb-8">Voice channel · your mic activates on join</p>
         <button onClick={joinChannel}
           className="btn-primary px-10 py-4 text-base flex items-center gap-2 rounded-2xl"
-          style={{ minHeight: '56px' }}>
-          <Mic size={20} /> Join Voice
+          style={{ minHeight: '56px' }}
+          disabled={isJoining}
+        >
+          <Mic size={20} /> {isJoining ? 'Joining...' : 'Join Voice'}
         </button>
       </div>
     );
