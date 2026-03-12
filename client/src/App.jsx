@@ -8,6 +8,7 @@ import { useAuthStore } from './context/authStore';
 import { connectSocket, disconnectSocket } from './utils/socket';
 import api from './utils/api';
 import AuthPage from './pages/AuthPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import AppLayout from './pages/AppLayout';
 import InvitePage from './pages/InvitePage';
 
@@ -55,13 +56,14 @@ function App() {
 
   // Activity tracking + 10m auto-logout (only if idle)
   useEffect(() => {
-    const now = Date.now();
-    localStorage.setItem(ACTIVITY_KEY, String(now));
+    // Reset activity when the app loads/refreshed, so refresh doesn't immediately logout.
+    localStorage.setItem(ACTIVITY_KEY, String(Date.now()));
 
     const refreshActivity = () => localStorage.setItem(ACTIVITY_KEY, String(Date.now()));
     const checkIdle = () => {
       const last = Number(localStorage.getItem(ACTIVITY_KEY));
-      if (last && Date.now() - last > INACTIVITY_TIMEOUT_MS && user) {
+      if (!last || !user) return;
+      if (Date.now() - last > INACTIVITY_TIMEOUT_MS) {
         logout();
       }
     };
@@ -70,9 +72,6 @@ function App() {
     events.forEach(evt => window.addEventListener(evt, refreshActivity));
 
     const intervalId = window.setInterval(checkIdle, 30 * 1000);
-
-    // On page load after refresh, enforce timeout gap too
-    checkIdle();
 
     return () => {
       events.forEach(evt => window.removeEventListener(evt, refreshActivity));
@@ -106,6 +105,7 @@ function App() {
       <Routes>
         <Route path="/auth" element={user ? <Navigate to="/app" replace /> : <AuthPage />} />
         <Route path="/invite/:code" element={<InvitePage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
           path="/app/*"
           element={

@@ -93,6 +93,14 @@ const userSchema = new mongoose.Schema({
     enum: ['everyone', 'friends', 'nobody'],
     default: 'everyone',
   },
+  resetPasswordToken: {
+    type: String,
+    default: null,
+  },
+  resetPasswordExpires: {
+    type: Date,
+    default: null,
+  },
   friends: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: { type: String, enum: ['pending', 'accepted', 'blocked'], default: 'pending' },

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore } from '../context/authStore';
 import toast from 'react-hot-toast';
+import api from '../utils/api';
 
 export default function AuthPage() {
   const [mode, setMode] = useState('login');
@@ -9,11 +10,28 @@ export default function AuthPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const result = mode === 'login'
-      ? await login(form.email, form.password)
-      : await register(form.username, form.email, form.password, form.displayName);
+    if (mode === 'login') {
+      const result = await login(form.email, form.password);
+      if (!result.success) toast.error(result.error);
+      return;
+    }
 
-    if (!result.success) toast.error(result.error);
+    if (mode === 'register') {
+      const result = await register(form.username, form.email, form.password, form.displayName);
+      if (!result.success) toast.error(result.error);
+      return;
+    }
+
+    if (mode === 'forgot') {
+      if (!form.email) return toast.error('Enter your email');
+      try {
+        await api.post('/auth/forgot-password', { email: form.email });
+        toast.success('Check your email for password reset instructions');
+        setMode('login');
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to send reset email');
+      }
+    }
   };
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
@@ -69,14 +87,22 @@ export default function AuthPage() {
                 </div>
               </>
             )}
+
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wider">Email</label>
               <input className="input-base" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} required />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wider">Password</label>
-              <input className="input-base" type="password" placeholder={mode === 'register' ? 'At least 8 characters' : '••••••••'} value={form.password} onChange={set('password')} required minLength={mode === 'register' ? 8 : 1} />
-            </div>
+
+            {mode === 'forgot' && (
+              <p className="text-xs text-text-muted">We’ll send a password reset link to this email.</p>
+            )}
+
+            {(mode === 'register' || mode === 'login') && (
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5 uppercase tracking-wider">Password</label>
+                <input className="input-base" type="password" placeholder={mode === 'register' ? 'At least 8 characters' : '••••••••'} value={form.password} onChange={set('password')} required minLength={mode === 'register' ? 8 : 1} />
+              </div>
+            )}
 
             <button
               type="submit"
@@ -89,10 +115,26 @@ export default function AuthPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                   </svg>
-                  {mode === 'login' ? 'Signing in...' : 'Creating account...'}
+                  {mode === 'login' ? 'Signing in...' : mode === 'register' ? 'Creating account...' : 'Sending reset email...'}
                 </span>
-              ) : mode === 'login' ? 'Sign In' : 'Create Account'}
+              ) : mode === 'login' ? 'Sign In' : mode === 'register' ? 'Create Account' : 'Send reset email'}
             </button>
+
+            {mode === 'login' && (
+              <div className="text-center mt-3">
+                <button type="button" onClick={() => setMode('forgot')} className="text-xs text-indigo-300 hover:text-indigo-200">
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
+            {mode === 'forgot' && (
+              <div className="text-center mt-3">
+                <button type="button" onClick={() => setMode('login')} className="text-xs text-indigo-300 hover:text-indigo-200">
+                  Back to Sign In
+                </button>
+              </div>
+            )}
           </form>
         </div>
 
