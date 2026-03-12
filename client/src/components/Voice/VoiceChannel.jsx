@@ -4,6 +4,8 @@ import { useAuthStore } from '../../context/authStore';
 import { getSocket, waitForSocket } from '../../utils/socket';
 import toast from 'react-hot-toast';
 
+
+
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -257,6 +259,7 @@ export default function VoiceChannel({ channel }) {
   const screenPCsRef = useRef({});
   const audioElementsRef = useRef({});
   const audioAnalysersRef = useRef({});
+  const remoteStreamsRef = useRef({}); // userId → MediaStream
   const speakingIntervalRef = useRef(null);
   const { user } = useAuthStore();
 
@@ -289,12 +292,14 @@ export default function VoiceChannel({ channel }) {
     };
 
     pc.ontrack = ({ streams }) => {
-      const stream = streams[0];
-      if (!stream) return;
-      const el = audioElementsRef.current[targetUserId];
-      if (el) el.srcObject = stream;
-      startSpeakingDetection(stream, targetUserId);
-    };
+  const stream = streams[0];
+  if (!stream) return;
+  remoteStreamsRef.current[targetUserId] = stream;
+  // Set immediately if element already exists
+  const el = audioElementsRef.current[targetUserId];
+  if (el) el.srcObject = stream;
+  startSpeakingDetection(stream, targetUserId);
+};
 
     pc.onconnectionstatechange = () => {
       if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
@@ -346,6 +351,7 @@ export default function VoiceChannel({ channel }) {
     screenPCsRef.current = {};
     Object.values(audioAnalysersRef.current).forEach(({ ctx }) => ctx.close().catch(() => {}));
     audioAnalysersRef.current = {};
+    remoteStreamsRef.current = {};
     clearInterval(speakingIntervalRef.current);
     setJoined(false);
     setParticipants([]);
@@ -533,13 +539,15 @@ export default function VoiceChannel({ channel }) {
     };
 
     const onOffer = async ({ channelId, fromUserId, offer }) => {
-      if (channelId !== channel._id) return;
-      let pc = peerConnectionsRef.current[fromUserId] || createPeerConnection(fromUserId);
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('voice:answer', { channelId, targetUserId: fromUserId, answer });
-    };
+  if (channelId !== channel._id) return;
+  // Always close and recreate to avoid stale state
+  peerConnectionsRef.current[fromUserId]?.close();
+  const pc = createPeerConnection(fromUserId);
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  socket.emit('voice:answer', { channelId, targetUserId: fromUserId, answer });
+};
 
     const onAnswer = async ({ fromUserId, answer }) => {
       const pc = peerConnectionsRef.current[fromUserId];
@@ -698,7 +706,14 @@ export default function VoiceChannel({ channel }) {
           {participants.map(p => (
             <ParticipantTile
               key={p.userId} participant={p} isSelf={p.userId === user._id}
-              audioRef={el => { if (el && p.userId !== user._id) audioElementsRef.current[p.userId] = el; }}
+              audioRef={el => {
+  if (el && p.userId !== user._id) {
+    audioElementsRef.current[p.userId] = el;
+    // If stream already arrived before element mounted, apply it now
+    const stream = remoteStreamsRef.current[p.userId];
+    if (stream) el.srcObject = stream;
+  }
+}}
             />
           ))}
         </div>
