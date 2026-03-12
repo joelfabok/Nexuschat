@@ -54,11 +54,12 @@ function ParticipantTile({ participant, isSelf, audioRef }) {
   );
 }
 
-function WatchParty({ channelId, onClose }) {
+function WatchParty({ channelId }) {
   const [url, setUrl] = useState('');
   const [activeParty, setActiveParty] = useState(null);
   const [showInput, setShowInput] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const iframeRef = useRef(null);
   const { user } = useAuthStore();
 
@@ -71,10 +72,21 @@ function WatchParty({ channelId, onClose }) {
 
     const onStarted = ({ url, type, hostId, displayName }) => {
       setActiveParty({ url, type, hostId, displayName });
+      setPanelOpen(true);
+      setShowInput(false);
       if (hostId !== user._id) toast(`${displayName} started a watch party!`);
     };
-    const onStopped = () => { setActiveParty(null); setShowInput(false); };
-    const onSync = ({ url, type, hostId }) => { if (url) setActiveParty({ url, type, hostId }); };
+    const onStopped = () => {
+      setActiveParty(null);
+      setShowInput(false);
+      setPanelOpen(false);
+    };
+    const onSync = ({ url, type, hostId, displayName }) => {
+      if (url) {
+        setActiveParty({ url, type, hostId, displayName });
+        setPanelOpen(true);
+      }
+    };
     const onPlay = () => { /* YouTube API syncs via postMessage if needed */ };
     const onPause = () => {};
     const onSeek = () => {};
@@ -94,7 +106,7 @@ function WatchParty({ channelId, onClose }) {
       socket.off('watch:pause', onPause);
       socket.off('watch:seek', onSeek);
     };
-  }, [channelId]);
+  }, [channelId, user._id]);
 
   const startParty = () => {
     if (!url.trim()) return;
@@ -102,15 +114,19 @@ function WatchParty({ channelId, onClose }) {
     const type = ytId ? 'youtube' : 'url';
     const finalUrl = ytId ? `https://www.youtube.com/embed/${ytId}?enablejsapi=1&autoplay=1&rel=0` : url.trim();
     getSocket()?.emit('watch:start', { channelId, url: finalUrl, type, rawUrl: url.trim() });
-    setActiveParty({ url: finalUrl, type, hostId: user._id, displayName: user.displayName || user.username });
+    setActiveParty({ url: finalUrl, type, hostId: user._id, displayName: user.displayName || user.username, rawUrl: url.trim() });
     setShowInput(false);
+    setPanelOpen(true);
     setUrl('');
   };
 
   const stopParty = () => {
     getSocket()?.emit('watch:stop', { channelId });
     setActiveParty(null);
+    setPanelOpen(false);
   };
+
+  const closePanel = () => setPanelOpen(false);
 
   if (!activeParty && !showInput) {
     return (
@@ -123,7 +139,7 @@ function WatchParty({ channelId, onClose }) {
     );
   }
 
-  if (showInput && !activeParty) {
+  if (showInput) {
     return (
       <div className="flex items-center gap-2 flex-1 max-w-lg">
         <input
@@ -140,31 +156,50 @@ function WatchParty({ channelId, onClose }) {
     );
   }
 
-  // Active party
   return (
-    <div className={`${fullscreen ? 'fixed inset-0 z-50 bg-black flex flex-col' : 'w-full rounded-xl overflow-hidden border border-surface-300 bg-black'}`}>
-      {/* Theater bar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-900/90 backdrop-blur-sm flex-shrink-0">
-        <Youtube size={14} className="text-red-500 flex-shrink-0" />
-        <span className="text-xs text-text-secondary truncate flex-1">Watch Party</span>
-        <button onClick={() => setFullscreen(!fullscreen)} className="text-text-muted hover:text-text-primary p-1"><Maximize2 size={14} /></button>
-        {activeParty.hostId === user._id && (
-          <button onClick={stopParty} className="text-status-dnd hover:text-red-400 text-xs flex items-center gap-1 p-1">
-            <X size={14} /> End
-          </button>
-        )}
-      </div>
-      <div className={`${fullscreen ? 'flex-1' : 'aspect-video'} w-full`}>
-        <iframe
-          ref={iframeRef}
-          src={activeParty.url}
-          className="w-full h-full"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          allowFullScreen
-          title="Watch Party"
-        />
-      </div>
-    </div>
+    <>
+      <button
+        onClick={() => setPanelOpen(v => !v)}
+        className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-surface-600 border border-surface-300 text-text-secondary hover:text-text-primary hover:border-brand-500 transition-all"
+      >
+        <Youtube size={15} className="text-red-500" /> {panelOpen ? 'Hide' : 'Show'} Watch Party
+      </button>
+
+      {panelOpen && (
+        <div className={`fixed right-4 top-20 z-50 w-[clamp(320px,70vw,900px)] max-h-[80vh] rounded-xl border border-surface-300 bg-surface-950 shadow-xl overflow-hidden text-white`}> 
+          <div className="flex items-center justify-between gap-2 px-3 py-2 bg-surface-900/95 border-b border-surface-300">
+            <div className="flex items-center gap-2">
+              <Youtube size={14} className="text-red-500" />
+              <span className="text-xs font-semibold">Watch Party</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setShowInput(true)} className="text-xs text-text-muted hover:text-text-primary px-2 py-1 rounded hover:bg-surface-800">Change</button>
+              <button onClick={() => setFullscreen(f => !f)} className="text-xs text-text-muted hover:text-text-primary px-2 py-1 rounded hover:bg-surface-800">{fullscreen ? 'Window' : 'Fullscreen'}</button>
+              <button onClick={closePanel} className="text-xs text-text-muted hover:text-text-primary p-1"><X size={14} /></button>
+            </div>
+          </div>
+
+          <div className={`w-full ${fullscreen ? 'h-[calc(100vh-90px)]' : 'h-[50vh]'} bg-black`}> 
+            <iframe
+              ref={iframeRef}
+              src={activeParty.url}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+              allowFullScreen
+              title="Watch Party"
+            />
+          </div>
+
+          <div className="flex items-center justify-between px-3 py-2 bg-surface-900/95 border-t border-surface-300 text-xs text-text-muted">
+            <span>{activeParty.hostId === user._id ? 'You' : activeParty.displayName || activeParty.hostId} is hosting</span>
+            {activeParty.rawUrl && <span className="truncate max-w-[180px]">{activeParty.rawUrl}</span>}
+            {activeParty.hostId === user._id && (
+              <button onClick={stopParty} className="text-red-500 hover:text-red-400 text-xs">End</button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
