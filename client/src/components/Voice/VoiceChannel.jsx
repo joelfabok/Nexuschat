@@ -322,20 +322,52 @@ export default function VoiceChannel({ channel }) {
 
   const joinChannel = async () => {
     setIsJoining(true);
+
     // iOS PWA fix: AudioContext must be created synchronously inside the tap handler
     // before any await, otherwise iOS blocks it as "not from user gesture"
     let iosAudioCtx = null;
     try { iosAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+
+    let socket;
+    let joinTimeout;
+
+    const cleanupJoinListeners = () => {
+      if (!socket) return;
+      socket.off('voice:join-success', onJoinSuccess);
+      socket.off('voice:join-failed', onJoinFailed);
+      if (joinTimeout) clearTimeout(joinTimeout);
+    };
+
+    const cleanupAfterFailure = () => {
+      setIsJoining(false);
+      setParticipants([]);
+      setJoined(false);
+      localStreamRef.current?.getTracks().forEach(t => t.stop());
+      localStreamRef.current?._gainCtx?.close().catch(() => {});
+      localStreamRef.current = null;
+    };
+
+    const onJoinSuccess = ({ channelId }) => {
+      if (channelId !== channel._id) return;
+      setJoined(true);
+      setIsJoining(false);
+      toast.success(`Joined ${channel.name}`);
+      cleanupJoinListeners();
+    };
+
+    const onJoinFailed = ({ channelId, reason }) => {
+      if (channelId !== channel._id) return;
+      cleanupJoinListeners();
+      cleanupAfterFailure();
+      toast.error(reason || 'Failed to join voice channel');
+    };
 
     try {
       // Load saved settings
       let saved = {};
       try { saved = JSON.parse(localStorage.getItem('nexus_audio_settings') || '{}'); } catch (_) {}
 
-      // Resume the AudioContext we created synchronously (iOS requires this)
-      if (iosAudioCtx?.state === 'suspended') {
-        await iosAudioCtx.resume();
-      }
+      if (iosAudioCtx?.state === 'suspended') await iosAudioCtx.resume();
 
       const audioConstraints = {
         echoCancellation: saved.echoCancellation ?? true,
@@ -346,7 +378,6 @@ export default function VoiceChannel({ channel }) {
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
 
-      // Apply input volume via GainNode — reuse the AudioContext we already created
       let finalStream = stream;
       try {
         const ctx = iosAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -358,18 +389,23 @@ export default function VoiceChannel({ channel }) {
         gainNode.connect(dest);
         finalStream = dest.stream;
         finalStream._gainCtx = ctx;
-        iosAudioCtx = null; // ctx is now owned by finalStream, don't close it below
+        iosAudioCtx = null;
       } catch (_) { /* fallback to raw stream */ }
 
       localStreamRef.current = finalStream;
       startSpeakingDetection(stream, user._id);
 
-      const socket = await waitForSocket();
+      socket = await waitForSocket();
+      socket.on('voice:join-success', onJoinSuccess);
+      socket.on('voice:join-failed', onJoinFailed);
+
       socket.emit('voice:join', { channelId: channel._id });
 
-      // Wait for server confirmation
-      const socket = await waitForSocket();
-      socket.emit('voice:join', { channelId: channel._id });
+      joinTimeout = setTimeout(() => {
+        cleanupJoinListeners();
+        cleanupAfterFailure();
+        toast.error('Voice join timed out. Please try again.');
+      }, 10000);
 
       setParticipants([{
         userId: user._id, username: user.username,
@@ -379,30 +415,13 @@ export default function VoiceChannel({ channel }) {
       }]);
       speakingIntervalRef.current = setInterval(checkSpeaking, 100);
 
-      // joined state is set when server acknowledges
-      const onJoinSuccess = ({ channelId }) => {
-        if (channelId !== channel._id) return;
-        setJoined(true);
-        setIsJoining(false);
-        toast.success(`Joined ${channel.name}`);
-        socket.off('voice:join-success', onJoinSuccess);
-      };
-      const onJoinFailed = ({ channelId, reason }) => {
-        if (channelId !== channel._id) return;
-        setIsJoining(false);
-        toast.error(reason || 'Failed to join voice channel');
-        socket.off('voice:join-failed', onJoinFailed);
-      };
-
-      socket.on('voice:join-success', onJoinSuccess);
-      socket.on('voice:join-failed', onJoinFailed);
-
-    } catch (err) {
-      setIsJoining(false);
-      // Clean up the pre-created AudioContext if we didn't use it
       iosAudioCtx?.close().catch(() => {});
-      if (err.name === 'NotAllowedError') toast.error('Mic access denied — allow it in your browser/phone settings');
-      else if (err.name === 'NotFoundError') toast.error('No microphone found');
+    } catch (err) {
+      cleanupJoinListeners();
+      setIsJoining(false);
+      iosAudioCtx?.close().catch(() => {});
+      if (err?.name === 'NotAllowedError') toast.error('Mic access denied — allow it in your browser/phone settings');
+      else if (err?.name === 'NotFoundError') toast.error('No microphone found');
       else { console.error('Voice join error:', err); toast.error('Failed to join voice: ' + (err.message || 'Unknown error')); }
     }
   };
