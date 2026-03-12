@@ -109,9 +109,20 @@ export default function AppLayout() {
     setActiveServer(server);
     setActiveDM(null);
     setView('server');
+
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
     const first = server.channels?.find(c => c.type === 'text');
-    if (first) { setActiveChannel(first); markChannelRead(first._id); }
-    setMobileView('sidebar');
+
+    // On desktop, auto-join first channel for convenience.
+    // On mobile, keep channel list visible and require explicit channel tap.
+    if (isDesktop && first) {
+      setActiveChannel(first);
+      markChannelRead(first._id);
+      setMobileView('chat');
+    } else {
+      setActiveChannel(null);
+      setMobileView('sidebar');
+    }
   };
 
   const handleChannelSelect = (channel) => {
