@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Hash, Paperclip, Send, Smile, BarChart2, Flag, MoreHorizontal, X, Trash2 } from 'lucide-react';
+import { Hash, Paperclip, Send, Smile, BarChart2, Flag, MoreHorizontal, X, Trash2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuthStore } from '../../context/authStore';
 import { getSocket } from '../../utils/socket';
@@ -270,6 +270,13 @@ export default function ChatArea({ channel, server }) {
   );
 }
 
+// Format file size nicely
+function formatSize(bytes) {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
+}
+
 function MessageItem({ message, grouped, currentUserId, channel, server }) {
   const [showMenu, setShowMenu] = useState(false);
   const { user } = useAuthStore();
@@ -277,6 +284,8 @@ function MessageItem({ message, grouped, currentUserId, channel, server }) {
   const isOwn = message.author?._id === currentUserId;
   const initials = (message.author?.displayName || message.author?.username || '?').slice(0, 2).toUpperCase();
   const isImage = (mt) => mt?.startsWith('image/');
+  const isVideo = (mt) => mt?.startsWith('video/');
+  const isAudio = (mt) => mt?.startsWith('audio/');
 
   const deleteMessage = async () => {
     setShowMenu(false);
@@ -290,6 +299,25 @@ function MessageItem({ message, grouped, currentUserId, channel, server }) {
       await api.post('/moderation/report', { targetMessageId: message._id, serverId: server?._id, reason: 'other', details: '' });
       toast.success('Message reported');
     } catch { toast.error('Failed to report'); }
+  };
+
+  // Trigger a real download via a temporary anchor (works even for cross-origin URLs)
+  const handleDownload = async (url, filename) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Fallback: just open in new tab
+      window.open(url, '_blank');
+    }
   };
 
   const role = server?.members?.find(m => (m.user?._id || m.user) === user._id || (m.user?._id || m.user) === String(user._id))?.role || 'member';
@@ -331,14 +359,66 @@ function MessageItem({ message, grouped, currentUserId, channel, server }) {
                 {message.attachments?.map((att, i) => (
                   <div key={i} className="mt-2 max-w-xs sm:max-w-sm">
                     {isImage(att.mimetype) ? (
-                      <img src={att.url} alt={att.originalName} className="rounded-lg max-h-64 max-w-full object-contain bg-surface-700 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(att.url, '_blank')} />
+                      // ── Image: click to open full size ──
+                      <div className="relative group/img">
+                        <img
+                          src={att.url}
+                          alt={att.originalName}
+                          className="rounded-lg max-h-64 max-w-full object-contain bg-surface-700 cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(att.url, '_blank')}
+                        />
+                        <button
+                          onClick={() => handleDownload(att.url, att.originalName)}
+                          className="absolute top-2 right-2 opacity-0 group-hover/img:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white rounded-lg p-1.5"
+                          title="Download"
+                        >
+                          <Download size={13} />
+                        </button>
+                      </div>
+                    ) : isVideo(att.mimetype) ? (
+                      // ── Video: inline player + download button ──
+                      <div className="rounded-lg overflow-hidden bg-surface-700 border border-surface-300">
+                        <video
+                          src={att.url}
+                          controls
+                          className="max-h-64 max-w-full w-full object-contain"
+                          preload="metadata"
+                        />
+                        <div className="flex items-center justify-between px-3 py-2 border-t border-surface-300">
+                          <span className="text-xs text-text-muted truncate flex-1 mr-2">{att.originalName}</span>
+                          <button
+                            onClick={() => handleDownload(att.url, att.originalName)}
+                            className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors flex-shrink-0"
+                          >
+                            <Download size={12} /> Download
+                          </button>
+                        </div>
+                      </div>
+                    ) : isAudio(att.mimetype) ? (
+                      // ── Audio: inline player + download button ──
+                      <div className="rounded-lg bg-surface-700 border border-surface-300 px-3 py-2 space-y-2">
+                        <audio src={att.url} controls className="w-full h-8" preload="metadata" />
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-text-muted truncate flex-1 mr-2">{att.originalName}</span>
+                          <button
+                            onClick={() => handleDownload(att.url, att.originalName)}
+                            className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors flex-shrink-0"
+                          >
+                            <Download size={12} /> Download
+                          </button>
+                        </div>
+                      </div>
                     ) : (
-                      <a href={att.url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2 bg-surface-700 border border-surface-300 rounded-lg px-3 py-2 hover:bg-surface-500 transition-colors">
+                      // ── All other files: download card ──
+                      <button
+                        onClick={() => handleDownload(att.url, att.originalName)}
+                        className="w-full flex items-center gap-2 bg-surface-700 border border-surface-300 rounded-lg px-3 py-2 hover:bg-surface-500 transition-colors text-left"
+                      >
                         <Paperclip size={13} className="text-text-muted flex-shrink-0" />
-                        <span className="text-sm text-brand-400 hover:underline truncate">{att.originalName}</span>
-                        <span className="text-xs text-text-muted flex-shrink-0">{(att.size/1024).toFixed(0)}KB</span>
-                      </a>
+                        <span className="text-sm text-brand-400 hover:underline truncate flex-1">{att.originalName}</span>
+                        <span className="text-xs text-text-muted flex-shrink-0">{formatSize(att.size)}</span>
+                        <Download size={13} className="text-text-muted flex-shrink-0" />
+                      </button>
                     )}
                   </div>
                 ))}
