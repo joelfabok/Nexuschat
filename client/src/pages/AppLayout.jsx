@@ -49,8 +49,17 @@ export default function AppLayout() {
       const onDMMessage = ({ conversationId }) => {
         if (!activeDM || activeDM._id !== conversationId) markDMUnread(conversationId);
       };
+      const onDMConversationDeleted = ({ conversationId }) => {
+        if (activeDM && activeDM._id === conversationId) {
+          setActiveDM(null);
+          setView('dms');
+          setMobileView('sidebar');
+        }
+        markDMRead(conversationId);
+      };
       socket.on('message:new', onNewMessage);
       socket.on('dm:message', onDMMessage);
+      socket.on('dm:conversation-deleted', onDMConversationDeleted);
       // Event reminders
       socket.on('event:reminder', ({ title, minsUntil }) => {
         toast(`⏰ ${title} starts in ${minsUntil} min!`, { duration: 8000, icon: '📅' });
@@ -65,7 +74,11 @@ export default function AppLayout() {
       socket.on('moderation:banned', ({ serverId, reason }) => {
         toast.error(`You were banned${reason ? ': ' + reason : ''}`, { duration: 10000 });
       });
-      return () => { socket.off('message:new', onNewMessage); socket.off('dm:message', onDMMessage); };
+      return () => {
+        socket.off('message:new', onNewMessage);
+        socket.off('dm:message', onDMMessage);
+        socket.off('dm:conversation-deleted', onDMConversationDeleted);
+      };
     };
     let cleanup = () => {};
     setup().then(fn => { if (fn) cleanup = fn; });
@@ -114,6 +127,15 @@ export default function AppLayout() {
     setMobileView('chat');
   };
 
+  const handleDMDeleted = (conversationId) => {
+    setActiveDM(prev => (prev?._id === conversationId ? null : prev));
+    markDMRead(conversationId);
+    if (activeDM?._id === conversationId) {
+      setView('dms');
+      setMobileView('sidebar');
+    }
+  };
+
   const handleDMView = () => {
     setView('dms');
     setActiveServer(null);
@@ -144,7 +166,7 @@ export default function AppLayout() {
 
   // ── Shared content blocks ────────────────────────────────────────────────
   const sidebarContent = view === 'dms'
-    ? <DMSidebar activeDM={activeDM} onDMSelect={handleDMSelect} />
+    ? <DMSidebar activeDM={activeDM} onDMSelect={handleDMSelect} onDMDelete={handleDMDeleted} />
     : view === 'friends'
     ? <FriendsPanel onStartDM={handleDMSelect} />
     : <ChannelSidebar server={activeServer} activeChannel={activeChannel}

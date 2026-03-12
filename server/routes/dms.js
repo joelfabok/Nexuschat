@@ -161,4 +161,25 @@ router.delete('/:conversationId/messages/:messageId', authenticate, async (req, 
   }
 });
 
+// ── DELETE DM CONVERSATION ─────────────────────────────────────────────────
+router.delete('/:conversationId', authenticate, async (req, res) => {
+  try {
+    const conversation = await DMConversation.findById(req.params.conversationId);
+    if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+    if (!conversation.participants.some(p => p.equals(req.user._id))) return res.status(403).json({ error: 'Not a participant' });
+
+    await DMConversation.findByIdAndDelete(conversation._id);
+    await DMMessage.deleteMany({ conversation: conversation._id });
+
+    conversation.participants.forEach(pid => {
+      io.to(`user:${pid}`).emit('dm:conversation-deleted', { conversationId: conversation._id });
+    });
+
+    res.json({ message: 'Conversation deleted' });
+  } catch (err) {
+    console.error('delete DM conversation error', err);
+    res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
 export default router;

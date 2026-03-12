@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, MessageCircle } from 'lucide-react';
+import { Search, MessageCircle, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../../context/authStore';
 import { useUnreadStore } from '../../context/unreadStore';
 import { getSocket, waitForSocket } from '../../utils/socket';
@@ -12,7 +12,7 @@ const STATUS_COLORS = {
   dnd: 'bg-status-dnd', offline: 'bg-status-offline',
 };
 
-export default function DMSidebar({ activeDM, onDMSelect }) {
+export default function DMSidebar({ activeDM, onDMSelect, onDMDelete }) {
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -37,13 +37,20 @@ export default function DMSidebar({ activeDM, onDMSelect }) {
         });
       };
 
+      const onConversationDeleted = ({ conversationId }) => {
+        setConversations(prev => prev.filter(c => c._id !== conversationId));
+        if (activeDM?._id === conversationId && onDMDelete) onDMDelete(conversationId);
+      };
+
       // Also refetch on reconnect so the list is always fresh
       const onReconnect = () => fetchConversations();
 
       socket.on('dm:message', onDMMessage);
+      socket.on('dm:conversation-deleted', onConversationDeleted);
       socket.on('connect', onReconnect);
       return () => {
         socket.off('dm:message', onDMMessage);
+        socket.off('dm:conversation-deleted', onConversationDeleted);
         socket.off('connect', onReconnect);
       };
     };
@@ -99,6 +106,21 @@ export default function DMSidebar({ activeDM, onDMSelect }) {
       } else {
         toast.error('Failed to open conversation');
       }
+    }
+  };
+
+  const handleDeleteConversation = async (conversationId) => {
+    if (!window.confirm('Delete this conversation for you and this user?')) return;
+    try {
+      await api.delete(`/dms/${conversationId}`);
+      setConversations(prev => prev.filter(c => c._id !== conversationId));
+      if (activeDM?._id === conversationId) {
+        onDMDelete?.(conversationId);
+      }
+      toast.success('Conversation deleted');
+    } catch (err) {
+      toast.error('Failed to delete conversation');
+      console.error('delete dm convo error', err);
     }
   };
 
@@ -197,7 +219,7 @@ export default function DMSidebar({ activeDM, onDMSelect }) {
                 )}
               </div>
 
-              {/* Right side: time + unread badge */}
+              {/* Right side: time + unread badge + delete */}
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 {conv.lastActivity && (
                   <span className="text-xs text-text-muted">
@@ -209,6 +231,13 @@ export default function DMSidebar({ activeDM, onDMSelect }) {
                     {unread > 99 ? '99+' : unread}
                   </span>
                 )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv._id); }}
+                  className="p-1 rounded hover:bg-surface-500/40"
+                  title="Delete DM"
+                >
+                  <Trash2 size={14} className="text-text-muted hover:text-red-400" />
+                </button>
               </div>
             </button>
           );
