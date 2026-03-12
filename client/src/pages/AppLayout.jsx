@@ -154,6 +154,13 @@ export default function AppLayout() {
     setMobileView('sidebar');
   };
 
+  const handleFriendsView = () => {
+    setView('friends');
+    setActiveServer(null);
+    setActiveChannel(null);
+    setMobileView('sidebar');
+  };
+
   const handleServerCreated = (server) => {
     setServers(prev => prev.find(s => s._id === server._id) ? prev : [...prev, server]);
     handleServerSelect(server);
@@ -203,7 +210,7 @@ export default function AppLayout() {
   const desktopLayout = (
     <div className="hidden md:flex h-screen w-screen overflow-hidden bg-surface-900">
       <ServerList servers={servers} activeServer={activeServer}
-        onServerSelect={handleServerSelect} onDMView={handleDMView} onFriendsView={() => setView('friends')}
+        onServerSelect={handleServerSelect} onDMView={handleDMView} onFriendsView={handleFriendsView}
         onServerCreated={handleServerCreated} isDMView={view === 'dms'} isFriendsView={view === 'friends'} />
       <div className="w-60 flex-shrink-0 flex flex-col bg-surface-800">
         {sidebarContent}
@@ -256,8 +263,16 @@ export default function AppLayout() {
               <ArrowLeft size={24} />
             </button>
             <span className="font-semibold text-text-primary text-base flex-1 truncate">
-              {view === 'dms' ? 'Messages' : activeServer?.name || 'Channels'}
+              {view === 'dms' ? 'Messages' : view === 'friends' ? 'Friends' : activeServer?.name || 'Channels'}
             </span>
+            <button onClick={handleDMView}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center ${view === 'dms' ? 'bg-brand-600 text-white' : 'text-text-muted hover:bg-surface-700 hover:text-white'}`}>
+              <MessageSquare size={18} />
+            </button>
+            <button onClick={handleFriendsView}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center ${view === 'friends' ? 'bg-brand-600 text-white' : 'text-text-muted hover:bg-surface-700 hover:text-white'}`}>
+              <Users size={18} />
+            </button>
           </div>
           <div className="flex-1 overflow-hidden">{sidebarContent}</div>
           <div style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
@@ -274,6 +289,14 @@ export default function AppLayout() {
               <ArrowLeft size={24} />
             </button>
             <span className="font-semibold text-text-primary text-base truncate flex-1">{chatTitle}</span>
+            <button onClick={handleDMView}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center ${view === 'dms' ? 'bg-brand-600 text-white' : 'text-text-muted hover:bg-surface-700 hover:text-white'}`}>
+              <MessageSquare size={18} />
+            </button>
+            <button onClick={handleFriendsView}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center ${view === 'friends' ? 'bg-brand-600 text-white' : 'text-text-muted hover:bg-surface-700 hover:text-white'}`}>
+              <Users size={18} />
+            </button>
           </div>
           <div className="flex-1 overflow-hidden">{chatContent}</div>
         </div>
